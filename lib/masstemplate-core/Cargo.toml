@@ -1,0 +1,19 @@
+[package]
+name = "masstemplate-core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+masstemplate-config = { path = "../masstemplate-config" }
+masstemplate-fileops = { path = "../masstemplate-fileops" }
+masstemplate-hooks = { path = "../masstemplate-hooks" }
+masstemplate-processing-dsl = { path = "../masstemplate-processing-dsl" }
+masstemplate-dsl-parser = { path = "../masstemplate-dsl-parser" }
+masstemplate-vcs = { path = "../masstemplate-vcs" }
+tokio = { version = "1.37.0", features = ["fs", "process"] }
+thiserror = "1.0.55"
+dirs = "5.0.1"
+serde = { version = "1.0.197", features = ["derive"] }
+
+[dev-dependencies]
+tempfile = "3.10.1"

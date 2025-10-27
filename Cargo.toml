@@ -1,0 +1,14 @@
+[workspace]
+resolver = "3"
+members = [
+    "apps/mtem-cli",
+    "lib/masstemplate-core",
+    "lib/masstemplate-config",
+    "lib/masstemplate-copier",
+    "lib/masstemplate-dsl-parser",
+    "lib/masstemplate-fileops",
+    "lib/masstemplate-hooks",
+    "lib/masstemplate-processors",
+    "lib/masstemplate-processing-dsl",
+    "lib/masstemplate-vcs"
+]

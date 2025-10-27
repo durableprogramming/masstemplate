@@ -1,0 +1,15 @@
+[package]
+name = "masstemplate-hooks"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+thiserror = "1.0.55"
+serde = { version = "1.0.197", features = ["derive"] }
+toml = "0.8.12"
+tokio = { version = "1.37.0", features = ["process", "fs", "macros", "rt-multi-thread"] }
+async-trait = "0.1.78"
+masstemplate-fileops = { path = "../masstemplate-fileops" }
+
+[dev-dependencies]
+tempfile = "3.10.1"
