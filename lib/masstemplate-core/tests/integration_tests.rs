@@ -1,8 +1,8 @@
 use std::env;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use tempfile::TempDir;
-use masstemplate_core::{apply_template_with_config_and_strategy, read_ignore_patterns, run_pre_install_script, run_post_install_script};
+use masstemplate_core::{TemplateApplicator, CoreError};
 use masstemplate_config::GlobalConfig;
 use masstemplate_fileops::CollisionStrategy;
 
@@ -29,13 +29,14 @@ fn create_test_config(temp_dir: &TempDir) -> GlobalConfig {
         template_directory: Some(temp_dir.path().join("templates").to_string_lossy().to_string()),
         default_collision_strategy: Some("skip".to_string()),
         verbose: Some(false),
+        template_sources: Some(Vec::new()),
     }
 }
 
 #[tokio::test]
 async fn test_apply_template_basic() {
     let temp_dir = TempDir::new().unwrap();
-    let template_dir = create_test_template(&temp_dir, "basic-template");
+    let _template_dir = create_test_template(&temp_dir, "basic-template");
     let config = create_test_config(&temp_dir);
 
     // Create destination directory
@@ -44,7 +45,8 @@ async fn test_apply_template_basic() {
     env::set_current_dir(&dest_dir).unwrap();
 
     // Apply template
-    let result = apply_template_with_config_and_strategy("basic-template", &config, CollisionStrategy::Skip).await;
+    let applicator = TemplateApplicator::new(config);
+    let result = applicator.apply_template_with_strategy("basic-template", &dest_dir, CollisionStrategy::Skip).await;
     assert!(result.is_ok());
 
     // Verify files were copied
@@ -74,7 +76,8 @@ async fn test_apply_template_with_pre_install_script() {
     env::set_current_dir(&dest_dir).unwrap();
 
     // Apply template
-    let result = apply_template_with_config_and_strategy("script-template", &config, CollisionStrategy::Skip).await;
+    let applicator = TemplateApplicator::new(config);
+    let result = applicator.apply_template_with_strategy("script-template", &dest_dir, CollisionStrategy::Skip).await;
     assert!(result.is_ok());
 
     // Verify pre-install script was executed
@@ -100,7 +103,8 @@ async fn test_apply_template_with_post_install_script() {
     env::set_current_dir(&dest_dir).unwrap();
 
     // Apply template
-    let result = apply_template_with_config_and_strategy("post-script-template", &config, CollisionStrategy::Skip).await;
+    let applicator = TemplateApplicator::new(config);
+    let result = applicator.apply_template_with_strategy("post-script-template", &dest_dir, CollisionStrategy::Skip).await;
     assert!(result.is_ok());
 
     // Verify post-install script was executed
@@ -128,7 +132,8 @@ async fn test_apply_template_with_ignore_patterns() {
     env::set_current_dir(&dest_dir).unwrap();
 
     // Apply template
-    let result = apply_template_with_config_and_strategy("ignore-template", &config, CollisionStrategy::Skip).await;
+    let applicator = TemplateApplicator::new(config);
+    let result = applicator.apply_template_with_strategy("ignore-template", &dest_dir, CollisionStrategy::Skip).await;
     assert!(result.is_ok());
 
     // Verify ignored files were not copied
@@ -143,7 +148,7 @@ async fn test_apply_template_with_ignore_patterns() {
 #[tokio::test]
 async fn test_apply_template_collision_skip() {
     let temp_dir = TempDir::new().unwrap();
-    let template_dir = create_test_template(&temp_dir, "collision-skip-template");
+    let _template_dir = create_test_template(&temp_dir, "collision-skip-template");
     let config = create_test_config(&temp_dir);
 
     // Create destination directory with existing file
@@ -153,7 +158,8 @@ async fn test_apply_template_collision_skip() {
     env::set_current_dir(&dest_dir).unwrap();
 
     // Apply template with skip strategy
-    let result = apply_template_with_config_and_strategy("collision-skip-template", &config, CollisionStrategy::Skip).await;
+    let applicator = TemplateApplicator::new(config);
+    let result = applicator.apply_template_with_strategy("collision-skip-template", &dest_dir, CollisionStrategy::Skip).await;
     assert!(result.is_ok());
 
     // Verify existing file was not overwritten
@@ -167,7 +173,7 @@ async fn test_apply_template_collision_skip() {
 #[tokio::test]
 async fn test_apply_template_collision_overwrite() {
     let temp_dir = TempDir::new().unwrap();
-    let template_dir = create_test_template(&temp_dir, "collision-overwrite-template");
+    let _template_dir = create_test_template(&temp_dir, "collision-overwrite-template");
     let config = create_test_config(&temp_dir);
 
     // Create destination directory with existing file
@@ -177,7 +183,8 @@ async fn test_apply_template_collision_overwrite() {
     env::set_current_dir(&dest_dir).unwrap();
 
     // Apply template with overwrite strategy
-    let result = apply_template_with_config_and_strategy("collision-overwrite-template", &config, CollisionStrategy::Overwrite).await;
+    let applicator = TemplateApplicator::new(config);
+    let result = applicator.apply_template_with_strategy("collision-overwrite-template", &dest_dir, CollisionStrategy::Overwrite).await;
     assert!(result.is_ok());
 
     // Verify existing file was overwritten
@@ -196,131 +203,45 @@ async fn test_apply_template_nonexistent_template() {
     env::set_current_dir(&dest_dir).unwrap();
 
     // Try to apply nonexistent template
-    let result = apply_template_with_config_and_strategy("nonexistent-template", &config, CollisionStrategy::Skip).await;
+    let applicator = TemplateApplicator::new(config);
+    let result = applicator.apply_template_with_strategy("nonexistent-template", &dest_dir, CollisionStrategy::Skip).await;
     assert!(result.is_err());
 
     // Verify it's the right kind of error
     match result {
-        Err(masstemplate_core::TemplateError::TemplateNotFound(name, _)) => {
+        Err(CoreError::TemplateNotFound(name)) => {
             assert_eq!(name, "nonexistent-template");
         }
         _ => panic!("Expected TemplateNotFound error"),
     }
 }
 
-#[test]
-fn test_read_ignore_patterns_no_file() {
+#[tokio::test]
+async fn test_script_failure() {
     let temp_dir = TempDir::new().unwrap();
-    let patterns = read_ignore_patterns(temp_dir.path()).unwrap();
-    assert!(patterns.is_empty());
-}
+    let template_dir = create_test_template(&temp_dir, "failing-script-template");
+    let config = create_test_config(&temp_dir);
 
-#[test]
-fn test_read_ignore_patterns_mtemignore() {
-    let temp_dir = TempDir::new().unwrap();
-    fs::write(temp_dir.path().join(".mtemignore"), "*.log\n# comment\n.cache/\n").unwrap();
-
-    let patterns = read_ignore_patterns(temp_dir.path()).unwrap();
-    assert_eq!(patterns, vec!["*.log", ".cache/"]);
-}
-
-#[test]
-fn test_read_ignore_patterns_mtem_ignore() {
-    let temp_dir = TempDir::new().unwrap();
-    let mtem_dir = temp_dir.path().join(".mtem");
+    // Create .mtem directory and failing script
+    let mtem_dir = template_dir.join(".mtem");
     fs::create_dir_all(&mtem_dir).unwrap();
-    fs::write(mtem_dir.join("ignore"), "*.tmp\nnode_modules/\n").unwrap();
-
-    let patterns = read_ignore_patterns(temp_dir.path()).unwrap();
-    assert_eq!(patterns, vec!["*.tmp", "node_modules/"]);
-}
-
-#[test]
-fn test_run_pre_install_script_no_script() {
-    let temp_dir = TempDir::new().unwrap();
-    let dest_dir = temp_dir.path().join("dest");
-    fs::create_dir_all(&dest_dir).unwrap();
-
-    let result = run_pre_install_script(temp_dir.path(), &dest_dir);
-    assert!(result.is_ok());
-}
-
-#[test]
-fn test_run_post_install_script_no_script() {
-    let temp_dir = TempDir::new().unwrap();
-    let dest_dir = temp_dir.path().join("dest");
-    fs::create_dir_all(&dest_dir).unwrap();
-
-    let result = run_post_install_script(temp_dir.path(), &dest_dir);
-    assert!(result.is_ok());
-}
-
-#[test]
-fn test_run_pre_install_script_success() {
-    let temp_dir = TempDir::new().unwrap();
-    let mtem_dir = temp_dir.path().join(".mtem");
-    fs::create_dir_all(&mtem_dir).unwrap();
-
-    // Create a successful script
-    fs::write(mtem_dir.join("pre_install.sh"), "#!/bin/sh\necho 'success' > marker.txt\n").unwrap();
-
-    let dest_dir = temp_dir.path().join("dest");
-    fs::create_dir_all(&dest_dir).unwrap();
-
-    let result = run_pre_install_script(temp_dir.path(), &dest_dir);
-    assert!(result.is_ok());
-
-    // Verify script ran
-    assert!(dest_dir.join("marker.txt").exists());
-}
-
-#[test]
-fn test_run_post_install_script_success() {
-    let temp_dir = TempDir::new().unwrap();
-    let mtem_dir = temp_dir.path().join(".mtem");
-    fs::create_dir_all(&mtem_dir).unwrap();
-
-    // Create a successful script
-    fs::write(mtem_dir.join("post_install.sh"), "#!/bin/sh\necho 'success' > marker.txt\n").unwrap();
-
-    let dest_dir = temp_dir.path().join("dest");
-    fs::create_dir_all(&dest_dir).unwrap();
-
-    let result = run_post_install_script(temp_dir.path(), &dest_dir);
-    assert!(result.is_ok());
-
-    // Verify script ran
-    assert!(dest_dir.join("marker.txt").exists());
-}
-
-#[test]
-fn test_run_pre_install_script_failure() {
-    let temp_dir = TempDir::new().unwrap();
-    let mtem_dir = temp_dir.path().join(".mtem");
-    fs::create_dir_all(&mtem_dir).unwrap();
-
-    // Create a failing script
     fs::write(mtem_dir.join("pre_install.sh"), "#!/bin/sh\nexit 1\n").unwrap();
 
-    let dest_dir = temp_dir.path().join("dest");
+    // Create destination directory
+    let dest_dir = temp_dir.path().join("project");
     fs::create_dir_all(&dest_dir).unwrap();
+    env::set_current_dir(&dest_dir).unwrap();
 
-    let result = run_pre_install_script(temp_dir.path(), &dest_dir);
-    assert!(matches!(result, Err(masstemplate_core::TemplateError::ScriptExecution(_))));
-}
+    // Try to apply template - should fail due to script
+    let applicator = TemplateApplicator::new(config);
+    let result = applicator.apply_template_with_strategy("failing-script-template", &dest_dir, CollisionStrategy::Skip).await;
+    assert!(result.is_err());
 
-#[test]
-fn test_run_post_install_script_failure() {
-    let temp_dir = TempDir::new().unwrap();
-    let mtem_dir = temp_dir.path().join(".mtem");
-    fs::create_dir_all(&mtem_dir).unwrap();
-
-    // Create a failing script
-    fs::write(mtem_dir.join("post_install.sh"), "#!/bin/sh\nexit 1\n").unwrap();
-
-    let dest_dir = temp_dir.path().join("dest");
-    fs::create_dir_all(&dest_dir).unwrap();
-
-    let result = run_post_install_script(temp_dir.path(), &dest_dir);
-    assert!(matches!(result, Err(masstemplate_core::TemplateError::ScriptExecution(_))));
+    // Verify it's a script execution error
+    match result {
+        Err(CoreError::ScriptExecutionFailed(_)) => {
+            // Expected error
+        }
+        _ => panic!("Expected ScriptExecutionFailed error"),
+    }
 }

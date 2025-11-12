@@ -1,0 +1,30 @@
+[package]
+name = "mtem-cli"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "mtem"
+path = "src/main.rs"
+
+[dependencies]
+masstemplate-core = { path = "../../lib/masstemplate-core" }
+masstemplate-config = { path = "../../lib/masstemplate-config" }
+masstemplate-copier = { path = "../../lib/masstemplate-copier" }
+masstemplate-fileops = { path = "../../lib/masstemplate-fileops" }
+masstemplate-vcs = { path = "../../lib/masstemplate-vcs" }
+masstemplate-hooks = { path = "../../lib/masstemplate-hooks" }
+clap = { version = "4.5.4", features = ["derive"] }
+tokio = { version = "1.37.0", features = ["rt-multi-thread", "macros"] }
+anyhow = "1.0.82"
+colored = "2.1.0"
+serde = { version = "1.0.197", features = ["derive"] }
+serde_json = "1.0.115"
+minijinja = { version = "1.0.12", features = ["builtins", "custom_syntax"] }
+walkdir = "2.5.0"
+
+[dev-dependencies]
+assert_cmd = "2.0.14"
+predicates = "3.1.0"
+cargo-tarpaulin = "0.29.1"
+tempfile = "3.10.1"

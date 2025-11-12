@@ -1,4 +1,5 @@
 use std::path::Path;
+use std::fs;
 use masstemplate_config::GlobalConfig;
 use crate::{TemplateFinder, TemplateFileCopier, ScriptRunner, CoreError};
 
@@ -9,6 +10,46 @@ pub struct TemplateApplicator {
 impl TemplateApplicator {
     pub fn new(config: GlobalConfig) -> Self {
         Self { config }
+    }
+
+    /// Read ignore patterns from .mtemignore or .mtem/ignore
+    fn read_ignore_patterns(&self, template_dir: &Path) -> Vec<String> {
+        let mut patterns = Vec::new();
+
+        // Always ignore .mtem directory and .mtemignore file
+        patterns.push(".mtem".to_string());
+        patterns.push(".mtemignore".to_string());
+
+        // Try .mtemignore first
+        let mtemignore_path = template_dir.join(".mtemignore");
+        if mtemignore_path.exists() {
+            if let Ok(content) = fs::read_to_string(&mtemignore_path) {
+                patterns.extend(
+                    content
+                        .lines()
+                        .map(|l| l.trim())
+                        .filter(|l| !l.is_empty() && !l.starts_with('#'))
+                        .map(|l| l.to_string())
+                );
+                return patterns;
+            }
+        }
+
+        // Try .mtem/ignore
+        let mtem_ignore_path = template_dir.join(".mtem").join("ignore");
+        if mtem_ignore_path.exists() {
+            if let Ok(content) = fs::read_to_string(&mtem_ignore_path) {
+                patterns.extend(
+                    content
+                        .lines()
+                        .map(|l| l.trim())
+                        .filter(|l| !l.is_empty() && !l.starts_with('#'))
+                        .map(|l| l.to_string())
+                );
+            }
+        }
+
+        patterns
     }
     
     /// Apply a template to a destination directory
@@ -30,12 +71,15 @@ impl TemplateApplicator {
         // Find the template
         let template_path = TemplateFinder::find_template(&self.config, template_name)?;
 
+        // Read ignore patterns from template directory
+        let ignore_patterns = self.read_ignore_patterns(&template_path);
+
         // Run pre-install script
         ScriptRunner::run_pre_install_script(&template_path, destination_dir).await?;
 
         // Copy files with processing
         let mut file_copier = TemplateFileCopier::new();
-        file_copier.copy_template_files_with_strategy(&template_path, destination_dir, &[], strategy).await?;
+        file_copier.copy_template_files_with_strategy(&template_path, destination_dir, &ignore_patterns, strategy).await?;
 
         // Run post-install script
         ScriptRunner::run_post_install_script(&template_path, destination_dir).await?;

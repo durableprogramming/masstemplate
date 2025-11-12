@@ -20,10 +20,25 @@ impl FileFilter {
         for pattern in &self.skip_patterns {
             // Simple glob-like matching
             if pattern.contains('*') {
-                // Convert glob to regex-like matching
-                let pattern_regex = pattern.replace("**", ".*").replace("*", "[^/]*");
-                if path_str.contains(&pattern_regex.replace(".*", "")) {
-                    return true;
+                // Convert glob pattern to simple matching
+                if pattern.starts_with("*.") {
+                    // Extension pattern like *.log
+                    let extension = &pattern[1..]; // .log
+                    if path_str.ends_with(extension) {
+                        return true;
+                    }
+                } else if pattern.starts_with('*') {
+                    // Suffix pattern like *foo
+                    let suffix = &pattern[1..];
+                    if path_str.ends_with(suffix) {
+                        return true;
+                    }
+                } else if pattern.ends_with('*') {
+                    // Prefix pattern like foo*
+                    let prefix = &pattern[..pattern.len() - 1];
+                    if path_str.contains(prefix) {
+                        return true;
+                    }
                 }
             } else if path_str.contains(pattern) {
                 return true;

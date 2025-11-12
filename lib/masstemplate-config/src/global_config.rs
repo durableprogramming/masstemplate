@@ -36,6 +36,7 @@ mod tests {
             default_collision_strategy: Some("overwrite".to_string()),
             verbose: Some(true),
             template_directory: Some("/custom/path".to_string()),
+            template_sources: Some(Vec::new()),
         };
 
         // Save config to temp file
