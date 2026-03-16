@@ -1,11 +1,11 @@
 use colored::*;
 use masstemplate_config::{get_template_info, load_global_config, GlobalConfig};
 use masstemplate_copier::{CopierConfig, TaskRunner, VariablePrompter};
-use masstemplate_core::TemplateApplicator;
 use masstemplate_fileops::CollisionStrategy;
 use masstemplate_hooks::HookManager;
 use minijinja::{Environment, Value};
 use serde::Serialize;
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
@@ -29,8 +29,12 @@ pub async fn execute(
     if template_name.is_empty() {
         return Err(anyhow::anyhow!("Template name cannot be empty"));
     }
-    if template_name.contains('/') || template_name.contains('\\') || template_name.contains("..") {
-        return Err(anyhow::anyhow!("Invalid template name: contains path separators"));
+
+    // Allow github: prefix, otherwise validate as local template name
+    if !template_name.starts_with("github:") {
+        if template_name.contains('/') || template_name.contains('\\') || template_name.contains("..") {
+            return Err(anyhow::anyhow!("Invalid template name: contains path separators"));
+        }
     }
 
     // Validate destination if provided
@@ -42,7 +46,7 @@ pub async fn execute(
 
     let config = load_global_config().await.unwrap_or_else(|_| GlobalConfig::default());
     let template_info = get_template_info(&config, template_name).await
-        .map_err(|_| anyhow::anyhow!("Template '{}' not found. Check that it exists in ~/.local/masstemplate/", template_name))?;
+        .map_err(|e| anyhow::anyhow!("Template '{}' not found: {}", template_name, e))?;
     let template_path = template_info.path;
 
     let dest_dir = dest.unwrap_or_else(|| std::env::current_dir().unwrap());
@@ -133,9 +137,27 @@ pub async fn execute(
             task_runner.run_tasks(&tasks).await?;
         }
     } else {
-        // Regular template application
-        let applicator = TemplateApplicator::new(config);
-        applicator.apply_template(template_name, &dest_dir).await?;
+        // Regular template application - use template_path directly since we already resolved it
+        use masstemplate_core::{TemplateFileCopier, ScriptRunner};
+        use masstemplate_fileops::CollisionStrategy;
+
+        let collision = collision_strategy
+            .as_ref()
+            .and_then(|s| CollisionStrategy::from_str(s).ok())
+            .unwrap_or(CollisionStrategy::Skip);
+
+        // Read ignore patterns
+        let ignore_patterns = read_ignore_patterns(&template_path);
+
+        // Run pre-install script
+        ScriptRunner::run_pre_install_script(&template_path, &dest_dir).await?;
+
+        // Copy files with processing
+        let mut file_copier = TemplateFileCopier::new();
+        file_copier.copy_template_files_with_strategy(&template_path, &dest_dir, &ignore_patterns, collision).await?;
+
+        // Run post-install script
+        ScriptRunner::run_post_install_script(&template_path, &dest_dir).await?;
     }
 
     // Execute post-copy hooks
@@ -290,4 +312,44 @@ async fn apply_copier_template(
     }
 
     Ok(())
+}
+
+/// Read ignore patterns from .mtemignore or .mtem/ignore
+fn read_ignore_patterns(template_dir: &Path) -> Vec<String> {
+    let mut patterns = Vec::new();
+
+    // Always ignore .mtem directory and .mtemignore file
+    patterns.push(".mtem".to_string());
+    patterns.push(".mtemignore".to_string());
+
+    // Try .mtemignore first
+    let mtemignore_path = template_dir.join(".mtemignore");
+    if mtemignore_path.exists() {
+        if let Ok(content) = fs::read_to_string(&mtemignore_path) {
+            patterns.extend(
+                content
+                    .lines()
+                    .map(|l| l.trim())
+                    .filter(|l| !l.is_empty() && !l.starts_with('#'))
+                    .map(|l| l.to_string())
+            );
+            return patterns;
+        }
+    }
+
+    // Try .mtem/ignore
+    let mtem_ignore_path = template_dir.join(".mtem").join("ignore");
+    if mtem_ignore_path.exists() {
+        if let Ok(content) = fs::read_to_string(&mtem_ignore_path) {
+            patterns.extend(
+                content
+                    .lines()
+                    .map(|l| l.trim())
+                    .filter(|l| !l.is_empty() && !l.starts_with('#'))
+                    .map(|l| l.to_string())
+            );
+        }
+    }
+
+    patterns
 }

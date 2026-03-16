@@ -1,7 +1,7 @@
 use std::path::Path;
 use std::collections::HashSet;
 use crate::{ConfigError, GlobalConfig, TemplateConfig, TemplateInfo};
-use crate::paths::{get_templates_directory, get_template_path};
+use crate::paths::{get_templates_directory, get_template_path, get_template_path_async};
 
 /// Discover all available templates
 pub async fn discover_templates(config: &GlobalConfig) -> Result<Vec<TemplateInfo>, ConfigError> {
@@ -93,7 +93,7 @@ pub async fn template_exists(config: &GlobalConfig, template_name: &str) -> Resu
 
 /// Get information about a specific template
 pub async fn get_template_info(config: &GlobalConfig, template_name: &str) -> Result<TemplateInfo, ConfigError> {
-    let path = get_template_path(config, template_name)?;
+    let path = get_template_path_async(config, template_name).await?;
 
     if !path.is_dir() {
         return Err(ConfigError::TemplateDirNotFound(path));
