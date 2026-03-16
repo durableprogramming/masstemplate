@@ -18,10 +18,18 @@ Masstemplate allows developers to create project templates as simple directories
 
 ## Installation
 
-Masstemplate is written in Rust and can be installed through Rust's cargo package manager:
+Masstemplate is written in Rust and can be built from source:
 
 ```bash
-cargo install masstemplate
+git clone https://github.com/durableprogramming/masstemplate.git
+cd masstemplate
+cargo build --release
+```
+
+The binary will be available at `target/release/mtem`. You can install it to your system by copying it to a directory in your PATH:
+
+```bash
+sudo cp target/release/mtem /usr/local/bin/
 ```
 
 For detailed installation instructions, see [docs/installation.md](docs/installation.md).
@@ -186,7 +194,7 @@ We welcome contributions from the community! Here's how you can help:
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/your-org/masstemplate.git
+   git clone https://github.com/durableprogramming/masstemplate.git
    cd masstemplate
    ```
 
@@ -226,8 +234,8 @@ Copyright (c) 2025 Durable Programming LLC
 
 ## Support
 
-- **Issues**: [GitHub Issues](https://github.com/your-org/masstemplate/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/your-org/masstemplate/discussions)
+- **Issues**: [GitHub Issues](https://github.com/durableprogramming/masstemplate/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/durableprogramming/masstemplate/discussions)
 - **Documentation**: [docs/](docs/)
 
 For commercial support or enterprise features, contact commercial@durableprogramming.com.
