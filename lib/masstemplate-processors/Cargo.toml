@@ -1,6 +1,6 @@
 [package]
 name = "masstemplate-processors"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 
 [dependencies]
@@ -9,3 +9,4 @@ serde_json = "1.0.115"
 thiserror = "1.0.55"
 inventory = "0.3.15"
 minijinja = { version = "1.0.12", features = ["builtins", "json"] }
+regex = "1.11"
